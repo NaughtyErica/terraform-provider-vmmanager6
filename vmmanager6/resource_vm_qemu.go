@@ -57,16 +57,10 @@ func resourceVmQemu() *schema.Resource {
 				Description: "RAM Size of VM in Megabytes",
 			},
 			"disk": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     6000,
-				Description: "Disk Size of VM in Megabytes",
-			},
-			"disks": {
 				Type:        schema.TypeList,
 				Optional:    true,
 				ForceNew:    true,
-				Description: "Secondary Disk of VM",
+				Description: "Disks of VM",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"size_mib": {
@@ -74,19 +68,6 @@ func resourceVmQemu() *schema.Resource {
 							Description: "Disk Size of VM in Megabytes",
 							Optional:    true,
 							Default:     6000,
-						},
-						"boot_order": {
-							Type:        schema.TypeInt,
-							Description: "Boot order of the Disk",
-							Required:    true,
-						},
-						"tags": {
-							Type:        schema.TypeList,
-							Description: "Tag of the Disk ",
-							Optional:    true,
-							Elem: &schema.Schema{
-								Type: schema.TypeInt,
-							},
 						},
 					},
 				},
@@ -97,11 +78,21 @@ func resourceVmQemu() *schema.Resource {
 				Default:     0,
 				Description: "id of VM preset. Preset will overwrite your cpu/mem/disk settings",
 			},
-			"disk_id": {
-				Type:        schema.TypeInt,
+			"disk_ids": {
+				Type:        schema.TypeList,
 				Optional:    true,
-				Computed:    true,
-				Description: "Internal variable. Main disk ID of VM",
+				ForceNew:    true,
+				Description: "Disks of VM",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+					"disk_id": {
+						Type:        schema.TypeInt,
+						Optional:    true,
+						Computed:    true,
+						Description: "Internal variable. Main disk ID of VM",
+						},
+					},
+				},
 			},
 			"cluster": {
 				Type:        schema.TypeInt,
@@ -342,11 +333,11 @@ func resourceVmQemuCreate(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Collect disks from config
-	secondary_disk_config := d.Get("disks").([]interface{})
-	var secondary_disk_api []vm6api.ConfigSecondaryDisk
+	disk_config := d.Get("disks").([]interface{})
+	var disk_api []vm6api.ConfigDisk
 
-	j, err = json.Marshal(secondary_disk_config)
-	err = json.Unmarshal(j, &secondary_disk_api)
+	j, err = json.Marshal(disk_config)
+	err = json.Unmarshal(j, &disk_api)
 	if err != nil {
 		return err
 	}
@@ -356,8 +347,7 @@ func resourceVmQemuCreate(d *schema.ResourceData, meta interface{}) error {
 		Description:        d.Get("desc").(string),
 		Memory:             d.Get("memory").(int),
 		QemuCores:          d.Get("cores").(int),
-		QemuDisks:          d.Get("disk").(int),
-		QemuSecondaryDisks: secondary_disk_api,
+		QemuDisks:          disk_api,
 		Cluster:            d.Get("cluster").(int),
 		Node:               d.Get("node").(int),
 		Account:            d.Get("account").(int),
@@ -479,8 +469,8 @@ func resourceVmQemuUpdate(ctx context.Context, d *schema.ResourceData, meta inte
 	// 6. Disk
 	if d.HasChange("disk") {
 		config := vm6api.ConfigDisk{
-			Size: d.Get("disk").(int),
-			Id:   d.Get("disk_id").(int),
+			Size: d.Get("disk").([]interface{}),
+			Id:   d.Get("disk_ids").([]interface{}),
 		}
 		logger.Debug().Int("vmid", vmID).Msgf("Updating VM with the following configuration: %+v", config)
 		err = config.UpdateDisk(client)
